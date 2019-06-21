@@ -900,6 +900,14 @@ class Cluster(object):
         self.endpoint_factory = endpoint_factory or DefaultEndPointFactory(port=self.port)
         self.endpoint_factory.configure(self)
 
+        self.proxy_endpoint = None
+        if (len(self.contact_points) == 1 and
+                isinstance(self.contact_points[0], str) and
+                self.contact_points[0].startswith('scyllaproxy://')):
+            proxy_endpoint = self.contact_points[0]
+            self.proxy_endpoint = proxy_endpoint.replace('scyllaproxy://', '')
+            self.contact_points = []
+
         raw_contact_points = [cp for cp in self.contact_points if not isinstance(cp, EndPoint)]
         self.endpoints_resolved = [cp for cp in self.contact_points if isinstance(cp, EndPoint)]
 
@@ -1380,6 +1388,21 @@ class Cluster(object):
         established or attempted. Default is `False`, which means it will return when the first
         successful connection is established. Remaining pools are added asynchronously.
         """
+
+        if self.proxy_endpoint:
+            log.debug("Connecting to proxy, endpoint: %s", self.proxy_endpoint)
+            self.connection_class.initialize_reactor()
+
+            from cassandra.proxy_session import ProxySession
+
+            proxy_host = Host(self.proxy_endpoint, SimpleConvictionPolicy)
+            # there's no metadata available from the proxy, so we use
+            # a simplified `populate()` call here:
+            self.load_balancing_policy.populate(
+                weakref.proxy(self), [proxy_host]
+            )
+            return ProxySession(self, [proxy_host])
+
         with self._lock:
             if self.is_shutdown:
                 raise DriverException("Cluster is already shut down")

@@ -21,6 +21,7 @@ from uuid import UUID
 import six
 from six.moves import range
 import io
+import snappy
 
 from cassandra import ProtocolVersion
 from cassandra import type_codes, DriverException
@@ -595,6 +596,24 @@ class QueryMessage(_MessageType):
             write_long(f, self.timestamp)
         if self.keyspace is not None:
             write_string(f, self.keyspace)
+
+
+class ProxyQueryMessage(_MessageType):
+    opcode = 0xF0
+    name = 'PROXY_QUERY'
+
+    def __init__(self, message, routing_key):
+        self.message = message
+        self.routing_key = routing_key
+
+    def send_body(self, f, protocol_version):
+        bytes = _ProtocolHandler.encode_message(
+            self.message, 0, 4,
+            compressor=snappy.compress, allow_beta_protocol_version=False,
+        )
+        message_bytes = bytes
+        write_longstring(f, message_bytes)
+        write_longstring(f, self.routing_key)
 
 
 CUSTOM_TYPE = object()
