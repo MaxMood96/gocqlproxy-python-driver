@@ -598,9 +598,9 @@ class QueryMessage(_MessageType):
             write_string(f, self.keyspace)
 
 
-class ProxyQueryMessage(_MessageType):
+class ProxiedMessage(_MessageType):
     opcode = 0xF0
-    name = 'PROXY_QUERY'
+    name = 'PROXY_MESSAGE'
 
     def __init__(self, message, routing_key):
         self.message = message
