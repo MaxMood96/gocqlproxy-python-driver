@@ -909,6 +909,10 @@ class Cluster(object):
             )[0]
             self.proxy_endpoint = DefaultEndPoint(address, self.port)
             self.contact_points = []
+            from cassandra.proxy_session import (
+                ProxyConnection,
+            )
+            self.connection_class = ProxyConnection
 
         raw_contact_points = [cp for cp in self.contact_points if not isinstance(cp, EndPoint)]
         self.endpoints_resolved = [cp for cp in self.contact_points if isinstance(cp, EndPoint)]
@@ -1362,6 +1366,10 @@ class Cluster(object):
         kwargs_dict.setdefault('user_type_map', self._user_types)
         kwargs_dict.setdefault('allow_beta_protocol_version', self.allow_beta_protocol_version)
         kwargs_dict.setdefault('no_compact', self.no_compact)
+        if self.proxy_endpoint:
+            # required to notify the cluster of closed connection, without using
+            # the control connection
+            kwargs_dict['proxy_cluster'] = weakref.proxy(self)
 
         return kwargs_dict
 
@@ -1395,15 +1403,17 @@ class Cluster(object):
             log.debug("Connecting to proxy, endpoint: %s", self.proxy_endpoint)
             self.connection_class.initialize_reactor()
 
+            # cluster is imported from proxy_session - avoid import cycles:
             from cassandra.proxy_session import ProxySession
 
-            proxy_host = Host(self.proxy_endpoint, SimpleConvictionPolicy)
+            self.proxy_host = Host(self.proxy_endpoint, self.conviction_policy_factory)
             # there's no metadata available from the proxy, so we use
             # a simplified `populate()` call here:
             self.load_balancing_policy.populate(
-                weakref.proxy(self), [proxy_host]
-            )
-            return ProxySession(self, [proxy_host])
+                weakref.proxy(self), [self.proxy_host])
+            session = ProxySession(self, [self.proxy_host])
+            self.sessions.add(session)
+            return session
 
         with self._lock:
             if self.is_shutdown:
@@ -2730,7 +2740,12 @@ class Session(object):
         For internal use only.
         """
         futures = set()
-        for host in self.cluster.metadata.all_hosts():
+        proxy = []
+        if self.cluster.proxy_endpoint:
+            # We have only one proxy host, and no metadata updates, so it
+            # needs to be re-added manually:
+            proxy = [self.cluster.proxy_host]
+        for host in proxy + self.cluster.metadata.all_hosts():
             distance = self._profile_manager.distance(host)
             pool = self._pools.get(host)
             future = None
