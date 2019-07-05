@@ -602,6 +602,8 @@ class ProxiedMessage(_MessageType):
     opcode = 0xF0
     name = 'PROXY_MESSAGE'
 
+    consistency_level = None
+
     def __init__(self, message, routing_key):
         self.message = message
         self.routing_key = routing_key

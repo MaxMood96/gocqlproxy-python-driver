@@ -902,10 +902,12 @@ class Cluster(object):
 
         self.proxy_endpoint = None
         if (len(self.contact_points) == 1 and
-                isinstance(self.contact_points[0], str) and
                 self.contact_points[0].startswith('scyllaproxy://')):
-            proxy_endpoint = self.contact_points[0]
-            self.proxy_endpoint = proxy_endpoint.replace('scyllaproxy://', '')
+            address = _resolve_contact_points(
+                [self.contact_points[0].replace('scyllaproxy://', '')],
+                self.port,
+            )[0]
+            self.proxy_endpoint = DefaultEndPoint(address, self.port)
             self.contact_points = []
 
         raw_contact_points = [cp for cp in self.contact_points if not isinstance(cp, EndPoint)]
