@@ -246,16 +246,19 @@ class BatchQuery(object):
         query_list = [opener]
         parameters = {}
         ctx_counter = 0
+        routing_key = None
         for query in self.queries:
             query.update_context_id(ctx_counter)
             ctx = query.get_context()
             ctx_counter += len(ctx)
             query_list.append('  ' + str(query))
             parameters.update(ctx)
+            if not routing_key:
+                routing_key = query.routing_key
 
         query_list.append('APPLY BATCH;')
 
-        tmp = conn.execute('\n'.join(query_list), parameters, self._consistency, self._timeout, connection=self._connection)
+        tmp = conn.execute('\n'.join(query_list), parameters, self._consistency, self._timeout, connection=self._connection, routing_key=routing_key)
         check_applied(tmp)
 
         self.queries = []
@@ -397,11 +400,13 @@ class AbstractQuerySet(object):
         return self.model.column_family_name()
 
     def _execute(self, statement):
+        connection = self._connection or self.model._get_connection()
+        s = _create_simple_statement(self.model, statement, self._consistency, connection=connection)
         if self._batch:
+            statement.routing_key = s.routing_key
             return self._batch.add_query(statement)
         else:
-            connection = self._connection or self.model._get_connection()
-            result = _execute_statement(self.model, statement, self._consistency, self._timeout, connection=connection)
+            result = conn.execute(s, statement.get_context(), timeout=self._timeout, connection=connection)
             if self._if_not_exists or self._if_exists or self._conditional:
                 check_applied(result)
             return result
@@ -1363,7 +1368,9 @@ class DMLQuery(object):
 
     def _execute(self, statement):
         connection = self.instance._get_connection() if self.instance else self.model._get_connection()
+        s = _create_simple_statement(self.model, statement, self._consistency, connection=connection)
         if self._batch:
+            statement.routing_key = s.routing_key
             if self._batch._connection:
                 if not self._batch._connection_explicit and connection and \
                         connection != self._batch._connection:
@@ -1373,7 +1380,7 @@ class DMLQuery(object):
                 self._batch._connection = connection
             return self._batch.add_query(statement)
         else:
-            results = _execute_statement(self.model, statement, self._consistency, self._timeout, connection=connection)
+            results = conn.execute(s, statement.get_context(), timeout=self._timeout, connection=connection)
             if self._if_not_exists or self._if_exists or self._conditional:
                 check_applied(results)
             return results
@@ -1517,8 +1524,7 @@ class DMLQuery(object):
             ds.add_where(col, EqualsOperator(), val)
         self._execute(ds)
 
-
-def _execute_statement(model, statement, consistency_level, timeout, connection=None):
+def _create_simple_statement(model, statement, consistency_level, connection=None):
     params = statement.get_context()
     s = SimpleStatement(str(statement), consistency_level=consistency_level, fetch_size=statement.fetch_size)
     if model._partition_key_index:
@@ -1527,5 +1533,4 @@ def _execute_statement(model, statement, consistency_level, timeout, connection=
             parts = model._routing_key_from_values(key_values, conn.get_cluster(connection).protocol_version)
             s.routing_key = parts
             s.keyspace = model._get_keyspace()
-    connection = connection or model._get_connection()
-    return conn.execute(s, params, timeout=timeout, connection=connection)
+    return s

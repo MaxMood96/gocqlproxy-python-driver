@@ -326,7 +326,7 @@ def setup(
                         retry_connect=retry_connect, cluster_options=kwargs, default=True)
 
 
-def execute(query, params=None, consistency_level=None, timeout=NOT_SET, connection=None):
+def execute(query, params=None, consistency_level=None, timeout=NOT_SET, connection=None, routing_key=None):
 
     conn = get_connection(connection)
 
@@ -341,6 +341,9 @@ def execute(query, params=None, consistency_level=None, timeout=NOT_SET, connect
     elif isinstance(query, six.string_types):
         query = SimpleStatement(query, consistency_level=consistency_level)
     log.debug(format_log_context('Query: {}, Params: {}'.format(query.query_string, params), connection=connection))
+
+    if routing_key:
+        query.routing_key = routing_key
 
     result = conn.session.execute(query, params, timeout=timeout)
 
