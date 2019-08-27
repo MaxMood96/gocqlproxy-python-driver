@@ -37,17 +37,14 @@ class ProxyConnection(DefaultConnection):
         # otherwise it was probably intentional disconnection
 
     def send_msg(self, msg, *args, **kwargs):
-        if isinstance(msg, ProxiedMessage):
-            original_msg = msg.message
-        else:
-            original_msg = msg
-            msg = ProxiedMessage(msg, b'')
-        if getattr(original_msg, 'consistency_level', None) is None:
+        if getattr(msg, 'consistency_level', None) is None:
             # ResponseFuture._set_result requires message.consistency_level
             # for ServerError messages. PrepareMessage for instance doesn't
             # have this attribute set, so it crashes with AttributeError
-            original_msg.consistency_level = None
-        return super().send_msg(msg, *args, **kwargs)
+            msg.consistency_level = None
+        routing_key = getattr(msg, 'routing_key', b'')
+        proxied_msg = ProxiedMessage(msg, routing_key)
+        return super().send_msg(proxied_msg, *args, **kwargs)
 
 
 class ProxySession(Session):
@@ -56,6 +53,5 @@ class ProxySession(Session):
         future = super()._create_response_future(*args, **kwargs)
         default_routing_key = b''
         routing_key = future.query.routing_key or default_routing_key
-        proxy_message = ProxiedMessage(future.message, routing_key)
-        future.message = proxy_message
+        future.message.routing_key = routing_key
         return future
