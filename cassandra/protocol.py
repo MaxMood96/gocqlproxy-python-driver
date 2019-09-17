@@ -609,11 +609,10 @@ class ProxiedMessage(_MessageType):
         self.routing_key = routing_key
 
     def send_body(self, f, protocol_version):
-        bytes = _ProtocolHandler.encode_message(
+        message_bytes = _ProtocolHandler.encode_message(
             self.message, 0, 4,
             compressor=snappy.compress, allow_beta_protocol_version=False,
         )
-        message_bytes = bytes
         write_longstring(f, message_bytes)
         write_longstring(f, self.routing_key)
 
