@@ -1,3 +1,10 @@
+gocqlproxy-python-driver
+========================
+
+This is a fork of Cassandra Python driver with `gocqlproxy <https://github.com/operasoftware/gocqlproxy>`_ support.
+
+To use the proxy support, pass ``scyllaproxy://host`` as the cluster node, with an appropriate ``port=`` argument. For instance, for proxy running on localhost:9043, use ``Cluster(["scyllaproxy://localhost"], port=9043)``.
+
 DataStax Python Driver for Apache Cassandra
 ===========================================
 
