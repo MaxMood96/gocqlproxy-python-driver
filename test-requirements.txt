@@ -9,7 +9,7 @@ sure
 pure-sasl
 twisted; python_version >= '3.5'
 twisted[tls]==19.2.1; python_version < '3.5'
-gevent>=1.0
+gevent>=23.9.0
 eventlet
 cython>=0.20,<0.30
 packaging
