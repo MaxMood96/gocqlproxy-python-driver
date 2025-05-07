@@ -9,9 +9,10 @@ sure
 pure-sasl
 twisted; python_version >= '3.5'
 twisted[tls]==19.2.1; python_version < '3.5'
-gevent>=1.0
+gevent>=25.4.1
 eventlet
 cython>=0.20,<0.30
 packaging
 futurist; python_version >= '3.7'
 asynctest; python_version > '3.4'
+setuptools>=78.1.1 # not directly required, pinned by Snyk to avoid a vulnerability
